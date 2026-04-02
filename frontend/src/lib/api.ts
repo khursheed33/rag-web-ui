@@ -13,18 +13,11 @@ export class ApiError extends Error {
 export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
   const { data, headers: customHeaders = {}, ...restOptions } = options;
 
-  // Get token from localStorage
-  let token = '';
-  if (typeof window !== 'undefined') {
-    token = localStorage.getItem('token') || '';
-  }
-
   const headers: Record<string, string> = {
-    ...(token && { Authorization: `Bearer ${token}` }),
     ...customHeaders,
   };
 
-  // If no content type is specified and we have data, default to JSON
+  // Auto set JSON content type
   if (!headers['Content-Type'] && data && !(data instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
@@ -34,14 +27,17 @@ export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
     headers,
   };
 
-  // Handle body based on Content-Type
+  // Handle body
   if (data) {
     if (data instanceof FormData) {
       config.body = data;
     } else if (headers['Content-Type'] === 'application/json') {
       config.body = JSON.stringify(data);
     } else if (headers['Content-Type'] === 'application/x-www-form-urlencoded') {
-      config.body = typeof data === 'string' ? data : new URLSearchParams(data).toString();
+      config.body =
+        typeof data === 'string'
+          ? data
+          : new URLSearchParams(data).toString();
     } else {
       config.body = data;
     }
@@ -51,11 +47,8 @@ export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
     const response = await fetch(fullUrl, config);
 
     if (response.status === 401) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-      }
-      throw new ApiError(401, 'Unauthorized - Please log in again');
+      console.error('Unauthorized request');
+      throw new ApiError(401, 'Unauthorized');
     }
 
     if (!response.ok) {
@@ -74,6 +67,8 @@ export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
     throw new ApiError(500, 'Network error or server is unreachable');
   }
 }
+
+
 
 // Helper methods for common HTTP methods
 export const api = {

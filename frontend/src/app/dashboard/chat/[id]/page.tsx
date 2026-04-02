@@ -384,7 +384,6 @@ export default function ChatPage({ params }: { params: { id: string } }) {
       setCorrectedAnswer("");
       toast({
         title: "Feedback saved",
-        description: "Your correction will be preferred for this question next time.",
       });
       fetchChat();
     } catch (error) {
