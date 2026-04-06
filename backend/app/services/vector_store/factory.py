@@ -3,12 +3,14 @@ from langchain_core.embeddings import Embeddings
 
 from .base import BaseVectorStore
 from .chroma import ChromaVectorStore
+from .pgvector import PGVectorStore
 from .qdrant import QdrantStore
 
 class VectorStoreFactory:
     """Factory for creating vector store instances"""
     
     _stores: Dict[str, Type[BaseVectorStore]] = {
+        'pgvector': PGVectorStore,
         'chroma': ChromaVectorStore,
         'qdrant': QdrantStore
     }

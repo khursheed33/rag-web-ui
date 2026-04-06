@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 from typing import List, Any, Dict
 from fastapi import (
     APIRouter,
@@ -10,7 +11,6 @@ from fastapi import (
     Query,
 )
 from sqlalchemy.orm import Session
-from langchain_chroma import Chroma
 from sqlalchemy import text
 import logging
 from datetime import datetime, timedelta
@@ -39,13 +39,10 @@ from app.schemas.knowledge import (
 )
 from app.services.document_processor import (
     process_document_background,
-    upload_document,
     preview_document,
     PreviewResult,
 )
 from app.core.config import settings
-from app.core.minio import get_minio_client
-from minio.error import MinioException
 from app.services.vector_store import VectorStoreFactory
 from app.services.embedding.embedding_factory import EmbeddingsFactory
 from app.models.chat import Chat, chat_knowledge_bases
@@ -179,9 +176,6 @@ async def delete_knowledge_base(
         raise HTTPException(status_code=404, detail="Knowledge base not found")
 
     try:
-        # Get all document file paths before deletion
-        document_paths = [doc.file_path for doc in kb.documents]
-
         # Delete chat history related to this knowledge base.
         related_chats = (
             db.query(Chat)
@@ -198,7 +192,6 @@ async def delete_knowledge_base(
             db.flush()
 
         # Initialize services
-        minio_client = get_minio_client()
         embeddings = EmbeddingsFactory.create()
 
         vector_store = VectorStoreFactory.create(
@@ -210,26 +203,29 @@ async def delete_knowledge_base(
         # Clean up external resources first
         cleanup_errors = []
 
-        # 1. Clean up MinIO files
+        # 1. Clean up vector store
         try:
-            # Delete all objects with prefix kb_{kb_id}/
-            objects = minio_client.list_objects(
-                settings.MINIO_BUCKET_NAME, prefix=f"kb_{kb_id}/"
-            )
-            for obj in objects:
-                minio_client.remove_object(settings.MINIO_BUCKET_NAME, obj.object_name)
-            logger.info(f"Cleaned up MinIO files for knowledge base {kb_id}")
-        except MinioException as e:
-            cleanup_errors.append(f"Failed to clean up MinIO files: {str(e)}")
-            logger.error(f"MinIO cleanup error for kb {kb_id}: {str(e)}")
-
-        # 2. Clean up vector store
-        try:
-            vector_store._store.delete_collection(f"kb_{kb_id}")
+            vector_store.delete_collection()
             logger.info(f"Cleaned up vector store for knowledge base {kb_id}")
         except Exception as e:
             cleanup_errors.append(f"Failed to clean up vector store: {str(e)}")
             logger.error(f"Vector store cleanup error for kb {kb_id}: {str(e)}")
+
+        # 2. Clean up local uploaded files for this knowledge base
+        try:
+            kb_upload_dir = Path(settings.LOCAL_UPLOAD_DIR) / f"kb_{kb_id}"
+            if kb_upload_dir.exists():
+                for path in kb_upload_dir.rglob("*"):
+                    if path.is_file():
+                        path.unlink(missing_ok=True)
+                for path in sorted(kb_upload_dir.rglob("*"), reverse=True):
+                    if path.is_dir():
+                        path.rmdir()
+                kb_upload_dir.rmdir()
+                logger.info(f"Cleaned local upload files for knowledge base {kb_id}")
+        except Exception as e:
+            cleanup_errors.append(f"Failed to clean local files: {str(e)}")
+            logger.error(f"Local file cleanup error for kb {kb_id}: {str(e)}")
 
         # Finally, delete database records in a single transaction
         db.delete(kb)
@@ -262,7 +258,7 @@ async def upload_kb_documents(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload multiple documents to MinIO.
+    Upload multiple documents to local temporary storage.
     """
     kb = (
         db.query(KnowledgeBase)
@@ -314,22 +310,17 @@ async def upload_kb_documents(
             )
             continue
 
-        # 3. 上传到临时目录
-        temp_path = f"kb_{kb_id}/temp/{file.filename}"
-        await file.seek(0)
+        # 3. Save file to local temp directory
+        temp_dir = Path(settings.LOCAL_UPLOAD_DIR) / f"kb_{kb_id}" / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_file_name = f"{file_hash[:12]}_{file.filename}"
+        temp_path = str(temp_dir / temp_file_name)
         try:
-            minio_client = get_minio_client()
-            file_size = len(file_content)  # 使用之前读取的文件内容长度
-            minio_client.put_object(
-                bucket_name=settings.MINIO_BUCKET_NAME,
-                object_name=temp_path,
-                data=file.file,
-                length=file_size,  # 指定文件大小
-                content_type=file.content_type,
-            )
-        except MinioException as e:
-            logger.error(f"Failed to upload file to MinIO: {str(e)}")
-            raise HTTPException(status_code=500, detail="Failed to upload file")
+            with open(temp_path, "wb") as local_file:
+                local_file.write(file_content)
+        except OSError as e:
+            logger.error(f"Failed to store uploaded file locally: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to store uploaded file")
 
         # 4. 创建上传记录
         upload = DocumentUpload(
@@ -381,6 +372,14 @@ async def preview_kb_documents(
         )
 
         if document:
+            if document.file_path.startswith("checksum://"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Document {doc_id} source file is not retained after ingestion. "
+                        "Preview is only available before processing."
+                    ),
+                )
             file_path = document.file_path
         else:
             upload = (
@@ -510,13 +509,11 @@ async def cleanup_temp_files(
         db.query(DocumentUpload).filter(DocumentUpload.created_at < expired_time).all()
     )
 
-    minio_client = get_minio_client()
     for upload in expired_uploads:
         try:
-            minio_client.remove_object(
-                bucket_name=settings.MINIO_BUCKET_NAME, object_name=upload.temp_path
-            )
-        except MinioException as e:
+            if upload.temp_path and os.path.exists(upload.temp_path):
+                os.remove(upload.temp_path)
+        except OSError as e:
             logger.error(f"Failed to delete temp file {upload.temp_path}: {str(e)}")
 
         db.delete(upload)

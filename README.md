@@ -45,7 +45,7 @@ It also provides OpenAPI interfaces for convenient knowledge base access via API
 - 🎯 **Robust Architecture**
   - Frontend-backend separation design
   - Distributed file storage
-  - High-performance vector database: Support for ChromaDB, Qdrant with easy switching through Factory pattern
+  - High-performance vector database: Support for PGVector, ChromaDB, Qdrant with easy switching through Factory pattern
 
 ## 🖼️ Screenshots
 
@@ -213,7 +213,7 @@ Access the following URLs after service startup:
 ### Backend Stack
 
 - 🐍 **Python FastAPI**: High-performance async web framework
-- 🗄️ **MySQL + ChromaDB**: Relational + Vector databases
+- 🗄️ **PostgreSQL (pgvector)**: Unified relational + vector database
 - 📦 **MinIO**: Distributed object storage
 - 🔗 **Langchain**: LLM application framework
 - 🔒 **JWT + OAuth2**: Authentication
@@ -247,10 +247,11 @@ docker compose -f docker-compose.dev.yml up -d --build
 
 | Parameter                   | Description                | Default   | Required |
 | --------------------------- | -------------------------- | --------- | -------- |
-| MYSQL_SERVER                | MySQL Server Address       | localhost | ✅        |
-| MYSQL_USER                  | MySQL Username             | postgres  | ✅        |
-| MYSQL_PASSWORD              | MySQL Password             | postgres  | ✅        |
-| MYSQL_DATABASE              | MySQL Database Name        | ragwebui  | ✅        |
+| POSTGRES_SERVER             | PostgreSQL Server Address  | pgvector  | ✅        |
+| POSTGRES_PORT               | PostgreSQL Port            | 5432      | ✅        |
+| POSTGRES_USER               | PostgreSQL Username        | ragwebui  | ✅        |
+| POSTGRES_PASSWORD           | PostgreSQL Password        | ragwebui  | ✅        |
+| POSTGRES_DATABASE           | PostgreSQL Database Name   | ragwebui  | ✅        |
 | SECRET_KEY                  | JWT Secret Key             | -         | ✅        |
 | ACCESS_TOKEN_EXPIRE_MINUTES | JWT Token Expiry (minutes) | 30        | ✅        |
 
@@ -283,7 +284,8 @@ docker compose -f docker-compose.dev.yml up -d --build
 
 | Parameter          | Description                       | Default               | Applicable            |
 | ------------------ | --------------------------------- | --------------------- | --------------------- |
-| VECTOR_STORE_TYPE  | Vector Store Type                 | chroma                | ✅                     |
+| VECTOR_STORE_TYPE  | Vector Store Type                 | pgvector              | ✅                     |
+| PGVECTOR_CONNECTION| PGVector Connection String        | postgresql+psycopg://ragwebui:ragwebui@pgvector:5432/ragwebui_vector | Required for PGVector |
 | CHROMA_DB_HOST     | ChromaDB Server Address           | localhost             | Required for ChromaDB |
 | CHROMA_DB_PORT     | ChromaDB Port                     | 8000                  | Required for ChromaDB |
 | QDRANT_URL         | Qdrant Vector Store URL           | http://localhost:6333 | Required for Qdrant   |

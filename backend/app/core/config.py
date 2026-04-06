@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Document processing config
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
+    LOCAL_UPLOAD_DIR: str = "/app/uploads"
     # Keep in sync with `.env.example` and frontend upload accept lists.
     SUPPORTED_EXTENSIONS: str = (
         ".pdf,.docx,.md,.txt,.pptx,.ppt,.xlsx,.xls"
@@ -25,12 +26,12 @@ class Settings(BaseSettings):
     def supported_extensions_list(self) -> List[str]:
         return [ext.strip() for ext in self.SUPPORTED_EXTENSIONS.split(",") if ext.strip()]
 
-    # MySQL settings
-    MYSQL_SERVER: str = "localhost"
-    MYSQL_PORT: int = 3306
-    MYSQL_USER: str = "ragwebui"
-    MYSQL_PASSWORD: str = "ragwebui"
-    MYSQL_DATABASE: str = "ragwebui"
+    # PostgreSQL settings (primary relational DB)
+    POSTGRES_SERVER: str = "pgvector"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "ragwebui"
+    POSTGRES_PASSWORD: str = "ragwebui"
+    POSTGRES_DATABASE: str = "ragwebui"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
     @property
@@ -38,8 +39,8 @@ class Settings(BaseSettings):
         if self.SQLALCHEMY_DATABASE_URI:
             return self.SQLALCHEMY_DATABASE_URI
         return (
-            f"mysql+mysqlconnector://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}"
-            f"@{self.MYSQL_SERVER}:{self.MYSQL_PORT}/{self.MYSQL_DATABASE}"
+            f"postgresql+psycopg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DATABASE}"
         )
 
     # JWT settings
@@ -70,7 +71,7 @@ class Settings(BaseSettings):
     DASH_SCOPE_EMBEDDINGS_MODEL: str = ""
 
     # Vector Store settings
-    VECTOR_STORE_TYPE: str = "chroma"
+    VECTOR_STORE_TYPE: str = "pgvector"
 
     # Chroma DB settings
     CHROMA_DB_HOST: str = "chromadb"
@@ -79,6 +80,11 @@ class Settings(BaseSettings):
     # Qdrant DB settings
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_PREFER_GRPC: bool = True
+
+    # PGVector settings
+    PGVECTOR_CONNECTION: str = (
+        "postgresql+psycopg://ragwebui:ragwebui@pgvector:5432/ragwebui"
+    )
 
     # Deepseek settings
     DEEPSEEK_API_KEY: str = ""

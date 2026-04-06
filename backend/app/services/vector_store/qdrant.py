@@ -38,6 +38,14 @@ class QdrantStore(BaseVectorStore):
         """Search for similar documents in Qdrant with score"""
         return self._store.similarity_search_with_score(query, k=k, **kwargs)
 
+    def count_documents(self) -> int:
+        """Count documents in Qdrant collection when possible."""
+        try:
+            info = self._store._client.get_collection(self._store._collection_name)
+            return int(getattr(info, "points_count", 0) or 0)
+        except Exception:
+            return 0
+
     def delete_collection(self) -> None:
         """Delete the entire collection"""
         self._store._client.delete_collection(self._store._collection_name) 

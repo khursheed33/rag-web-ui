@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Table
-from sqlalchemy.dialects.mysql import LONGTEXT
+from sqlalchemy import Text
 from sqlalchemy.orm import relationship
 from app.models.base import Base, TimestampMixin
 
@@ -31,13 +31,13 @@ class Message(Base, TimestampMixin):
     __tablename__ = "messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    content = Column(LONGTEXT, nullable=False)
+    content = Column(Text, nullable=False)
     role = Column(String(50), nullable=False)
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     feedback_type = Column(String(10), nullable=True)
-    feedback_note = Column(LONGTEXT, nullable=True)
-    corrected_answer = Column(LONGTEXT, nullable=True)
-    feedback_query = Column(LONGTEXT, nullable=True)
+    feedback_note = Column(Text, nullable=True)
+    corrected_answer = Column(Text, nullable=True)
+    feedback_query = Column(Text, nullable=True)
 
     # Relationships
     chat = relationship("Chat", back_populates="messages") 

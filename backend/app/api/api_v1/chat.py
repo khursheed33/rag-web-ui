@@ -194,14 +194,7 @@ def message_feedback(
     if feedback_type == "up":
         resolved_answer = feedback.assistant_response.strip()
     else:
-        resolved_answer = (feedback.corrected_answer or "").strip() or (
-            feedback.feedback_note or ""
-        ).strip()
-        if not resolved_answer:
-            raise HTTPException(
-                status_code=400,
-                detail="Please provide corrected_answer or feedback_note for thumbs down",
-            )
+        resolved_answer = (feedback.corrected_answer or "").strip() or None
 
     message.feedback_type = feedback_type
     message.feedback_note = (feedback.feedback_note or "").strip() or None

@@ -31,5 +31,5 @@ RUN mkdir -p uploads
 ENV PYTHONPATH=/app
 ENV ENVIRONMENT=production
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations and then start the application
+ENTRYPOINT ["./entrypoint.sh"]

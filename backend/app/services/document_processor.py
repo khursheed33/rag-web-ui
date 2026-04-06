@@ -4,6 +4,7 @@ import hashlib
 import tempfile
 import traceback
 from datetime import datetime
+from pathlib import Path
 from app.db.session import SessionLocal
 from io import BytesIO
 from typing import Optional, List, Dict, Set
@@ -20,15 +21,11 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.minio import get_minio_client
 from app.models.knowledge import ProcessingTask, Document, DocumentChunk
 from app.services.chunk_record import ChunkRecord
 import uuid
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import UnstructuredFileLoader
-from minio.error import MinioException
-from minio import Minio
-from minio.commonconfig import CopySource
 from app.services.vector_store import VectorStoreFactory
 from app.services.embedding.embedding_factory import EmbeddingsFactory
 
@@ -151,7 +148,7 @@ async def process_document(
 
 
 async def upload_document(file: UploadFile, kb_id: int) -> UploadResult:
-    """Step 1: Upload document to MinIO"""
+    """Step 1: Upload document to local temporary storage."""
     content = await file.read()
     file_size = len(content)
 
@@ -177,22 +174,19 @@ async def upload_document(file: UploadFile, kb_id: int) -> UploadResult:
     _, ext = os.path.splitext(file_name)
     content_type = content_types.get(ext.lower(), "application/octet-stream")
 
-    # Upload to MinIO
-    minio_client = get_minio_client()
+    upload_dir = Path(settings.LOCAL_UPLOAD_DIR) / f"kb_{kb_id}"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    local_file_path = upload_dir / file_name
+
     try:
-        minio_client.put_object(
-            bucket_name=settings.MINIO_BUCKET_NAME,
-            object_name=object_path,
-            data=BytesIO(content),
-            length=file_size,
-            content_type=content_type,
-        )
-    except Exception as e:
-        logging.error(f"Failed to upload file to MinIO: {str(e)}")
+        with open(local_file_path, "wb") as local_file:
+            local_file.write(content)
+    except OSError as e:
+        logging.error(f"Failed to write uploaded file to local storage: {str(e)}")
         raise
 
     return UploadResult(
-        file_path=object_path,
+        file_path=str(local_file_path),
         file_name=file_name,
         file_size=file_size,
         content_type=content_type,
@@ -205,20 +199,10 @@ async def preview_document(
 ) -> PreviewResult:
     chunk_size = chunk_size or settings.CHUNK_SIZE
     chunk_overlap = chunk_overlap or settings.CHUNK_OVERLAP
-    """Step 2: Generate preview chunks"""
-    # Get file from MinIO
-    minio_client = get_minio_client()
+    """Step 2: Generate preview chunks from a local file."""
+    temp_path = file_path
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
-
-    # Download to temp file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_file:
-        minio_client.fget_object(
-            bucket_name=settings.MINIO_BUCKET_NAME,
-            object_name=file_path,
-            file_path=temp_file.name,
-        )
-        temp_path = temp_file.name
 
     try:
         # Select appropriate loader
@@ -274,7 +258,7 @@ async def preview_document(
 
         return PreviewResult(chunks=preview_chunks, total_chunks=len(chunks))
     finally:
-        os.unlink(temp_path)
+        pass
 
 
 async def process_document_background(
@@ -309,21 +293,10 @@ async def process_document_background(
         task.status = "processing"
         db.commit()
 
-        # 1. 从临时目录下载文件
-        minio_client = get_minio_client()
-        try:
-            local_temp_path = f"/tmp/temp_{task_id}_{file_name}"  # 使用系统临时目录
-            logger.info(
-                f"Task {task_id}: Downloading file from MinIO: {temp_path} to {local_temp_path}"
-            )
-            minio_client.fget_object(
-                bucket_name=settings.MINIO_BUCKET_NAME,
-                object_name=temp_path,
-                file_path=local_temp_path,
-            )
-            logger.info(f"Task {task_id}: File downloaded successfully")
-        except MinioException as e:
-            error_msg = f"Failed to download temp file: {str(e)}"
+        # 1. Use local temp file directly
+        local_temp_path = temp_path
+        if not os.path.exists(local_temp_path):
+            error_msg = f"Local temp file not found: {local_temp_path}"
             logger.error(f"Task {task_id}: {error_msg}")
             raise Exception(error_msg)
 
@@ -392,35 +365,11 @@ async def process_document_background(
                 embedding_function=embeddings,
             )
 
-            # 4. 将临时文件移动到永久目录
-            permanent_path = f"kb_{kb_id}/{file_name}"
-            try:
-                logger.info(f"Task {task_id}: Moving file to permanent storage")
-                # 复制到永久目录
-                source = CopySource(settings.MINIO_BUCKET_NAME, temp_path)
-                minio_client.copy_object(
-                    bucket_name=settings.MINIO_BUCKET_NAME,
-                    object_name=permanent_path,
-                    source=source,
-                )
-                logger.info(f"Task {task_id}: File moved to permanent storage")
-
-                # 删除临时文件
-                logger.info(f"Task {task_id}: Removing temporary file from MinIO")
-                minio_client.remove_object(
-                    bucket_name=settings.MINIO_BUCKET_NAME, object_name=temp_path
-                )
-                logger.info(f"Task {task_id}: Temporary file removed")
-            except MinioException as e:
-                error_msg = f"Failed to move file to permanent storage: {str(e)}"
-                logger.error(f"Task {task_id}: {error_msg}")
-                raise Exception(error_msg)
-
-            # 5. 创建文档记录
+            # 4. 创建文档记录（不保留原文件，仅保留 checksum 引用）
             logger.info(f"Task {task_id}: Creating document record")
             document = Document(
                 file_name=file_name,
-                file_path=permanent_path,
+                file_path=f"checksum://{task.document_upload.file_hash}",
                 file_hash=task.document_upload.file_hash,
                 file_size=task.document_upload.file_size,
                 content_type=task.document_upload.content_type,
@@ -433,7 +382,7 @@ async def process_document_background(
                 f"Task {task_id}: Document record created with ID {document.id}"
             )
 
-            # 6. 存储文档块
+            # 5. 存储文档块
             logger.info(f"Task {task_id}: Storing document chunks")
             for i, chunk in enumerate(chunks):
                 # 为每个 chunk 生成唯一的 ID
@@ -464,18 +413,18 @@ async def process_document_background(
                     logger.info(f"Task {task_id}: Stored {i} chunks")
                     db.commit()  # 每 100 条提交一次，避免事务太大
 
-            # 7. 添加到向量存储
+            # 6. 添加到向量存储
             logger.info(f"Task {task_id}: Adding chunks to vector store")
             vector_store.add_documents(chunks)
             # 移除 persist() 调用，因为新版本不需要
             logger.info(f"Task {task_id}: Chunks added to vector store")
 
-            # 8. 更新任务状态
+            # 7. 更新任务状态
             logger.info(f"Task {task_id}: Updating task status to completed")
             task.status = "completed"
             task.document_id = document.id  # 更新为新创建的文档ID
 
-            # 9. 更新上传记录状态
+            # 8. 更新上传记录状态
             upload = task.document_upload  # 直接通过关系获取
             if upload:
                 logger.info(
@@ -507,15 +456,12 @@ async def process_document_background(
 
         # 清理临时文件
         try:
-            logger.info(f"Task {task_id}: Cleaning up temporary file after error")
-            minio_client.remove_object(
-                bucket_name=settings.MINIO_BUCKET_NAME, object_name=temp_path
-            )
-            logger.info(f"Task {task_id}: Temporary file cleaned up after error")
-        except:
-            logger.warning(
-                f"Task {task_id}: Failed to clean up temporary file after error"
-            )
+            if os.path.exists(temp_path):
+                logger.info(f"Task {task_id}: Cleaning up temporary file after error")
+                os.remove(temp_path)
+                logger.info(f"Task {task_id}: Temporary file cleaned up after error")
+        except Exception:
+            logger.warning(f"Task {task_id}: Failed to clean up temporary file after error")
     finally:
         # if we create the db session, we need to close it
         if should_close_db and db:

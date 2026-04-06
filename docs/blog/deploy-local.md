@@ -71,15 +71,15 @@ EMBEDDINGS_PROVIDER=ollama
 OLLAMA_EMBEDDINGS_MODEL=nomic-embed-text
 
 # 向量数据库配置
-VECTOR_STORE_TYPE=chroma
-CHROMA_DB_HOST=chromadb
-CHROMA_DB_PORT=8000
+VECTOR_STORE_TYPE=pgvector
+PGVECTOR_CONNECTION=postgresql+psycopg://ragwebui:ragwebui@pgvector:5432/ragwebui_vector
 
-# MySQL 配置
-MYSQL_SERVER=db
-MYSQL_USER=ragwebui
-MYSQL_PASSWORD=ragwebui
-MYSQL_DATABASE=ragwebui
+# PostgreSQL 配置
+POSTGRES_SERVER=pgvector
+POSTGRES_PORT=5432
+POSTGRES_USER=ragwebui
+POSTGRES_PASSWORD=ragwebui
+POSTGRES_DATABASE=ragwebui
 
 # MinIO 配置
 MINIO_ENDPOINT=minio:9000
@@ -102,8 +102,8 @@ docker compose up -d --build
 
 - 前端界面 (Next.js)
 - 后端 API (FastAPI)
-- MySQL 数据库
-- ChromaDB 向量数据库
+- PostgreSQL (pgvector) 数据库
+- PGVector 向量数据库
 - MinIO 对象存储
 - Ollama 服务
 

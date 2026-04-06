@@ -3,11 +3,11 @@
 # exit on error
 set -e
 
-echo "Waiting for MySQL..."
-while ! nc -z db 3306; do
+echo "Waiting for PostgreSQL..."
+while ! nc -z pgvector 5432; do
   sleep 1
 done
-echo "MySQL started"
+echo "PostgreSQL started"
 
 echo "Running migrations..."
 if alembic upgrade head; then

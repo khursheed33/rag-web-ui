@@ -42,6 +42,10 @@ class ChromaVectorStore(BaseVectorStore):
         """Search for similar documents in Chroma with score"""
         return self._store.similarity_search_with_score(query, k=k, **kwargs)
 
+    def count_documents(self) -> int:
+        """Count documents in Chroma collection."""
+        return self._store._collection.count()
+
     def delete_collection(self) -> None:
         """Delete the entire collection"""
         self._store._client.delete_collection(self._store._collection.name) 

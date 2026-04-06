@@ -58,10 +58,11 @@ def _get_feedback_answer(
         if _normalize_text(candidate.feedback_query or "") != normalized_query:
             continue
 
-        preferred_answer = (
-            (candidate.corrected_answer or "").strip()
-            or _extract_assistant_text(candidate.content)
-        )
+        if candidate.feedback_type == "up":
+            preferred_answer = _extract_assistant_text(candidate.content)
+        else:
+            # Only reuse explicit corrected answers for thumbs-down feedback.
+            preferred_answer = (candidate.corrected_answer or "").strip()
         if preferred_answer:
             return preferred_answer
 
@@ -132,7 +133,7 @@ async def generate_response(
                     collection_name=f"kb_{kb.id}",
                     embedding_function=embeddings,
                 )
-                print(f"Collection {f'kb_{kb.id}'} count:", vector_store._store._collection.count())
+                print(f"Collection {f'kb_{kb.id}'} count:", vector_store.count_documents())
                 vector_stores.append(vector_store)
         
         if not vector_stores:

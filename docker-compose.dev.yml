@@ -8,7 +8,6 @@ services:
     depends_on:
       - frontend
       - backend
-      - minio
     networks:
       - app_network
     healthcheck:
@@ -42,9 +41,8 @@ services:
     networks:
       - app_network
     depends_on:
-      - db
-      - chromadb
-      - minio
+      - pgvector
+      # - chromadb
     restart: on-failure
     deploy:
       restart_policy:
@@ -81,49 +79,38 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  db:
-    image: mysql:8.0
-    command: --default-authentication-plugin=mysql_native_password
-    environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=ragwebui
-      - MYSQL_USER=ragwebui
-      - MYSQL_PASSWORD=ragwebui
-      - TZ=Asia/Shanghai
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - app_network
+  # chromadb:
+  #   image: chromadb/chroma:latest
+  #   ports:
+  #     - "8001:8000"
+  #   volumes:
+  #     - chroma_data:/chroma/chroma
+  #   networks:
+  #     - app_network
 
-  chromadb:
-    image: chromadb/chroma:latest
-    ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-    networks:
-      - app_network
-
-  minio:
-    image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+  pgvector:
+    image: pgvector/pgvector:pg16
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - POSTGRES_DB=ragwebui
+      - POSTGRES_USER=ragwebui
+      - POSTGRES_PASSWORD=ragwebui
+    ports:
+      - "5432:5432"
     volumes:
-      - minio_data:/data
-    command: server --console-address ":9001" /data
+      - pgvector_data:/var/lib/postgresql/data
+      - ./infra/sql/pgvector-init.sql:/docker-entrypoint-initdb.d/pgvector-init.sql:ro
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragwebui -d ragwebui"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
-  mysql_data:
-  chroma_data:
-  minio_data:
+  # chroma_data:
+  pgvector_data:
 
 networks:
   app_network:

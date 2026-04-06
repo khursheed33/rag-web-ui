@@ -37,6 +37,11 @@ class BaseVectorStore(ABC):
         pass
 
     @abstractmethod
+    def count_documents(self) -> int:
+        """Return document count for this collection when supported"""
+        pass
+
+    @abstractmethod
     def delete_collection(self) -> None:
         """Delete the entire collection"""
         pass 

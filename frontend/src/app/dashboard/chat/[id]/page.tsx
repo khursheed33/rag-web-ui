@@ -128,6 +128,10 @@ export default function ChatPage({ params }: { params: { id: string } }) {
               id: msg.id.toString(),
               role: msg.role,
               content: msg.content,
+              feedbackType: msg.feedback_type ?? null,
+              feedbackNote: msg.feedback_note ?? null,
+              correctedAnswer: msg.corrected_answer ?? null,
+              feedbackQuery: msg.feedback_query ?? null,
             };
           }
 
