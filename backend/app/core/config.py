@@ -66,9 +66,24 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4"
     OPENAI_EMBEDDINGS_MODEL: str = "text-embedding-ada-002"
 
+    # Azure OpenAI settings
+    AZURE_OPENAI_ENDPOINT: str = ""
+    AZURE_OPENAI_API_VERSION: str = "2024-02-01"
+    AZURE_OPENAI_API_KEY: str = ""
+    AZURE_OPENAI_DEPLOYMENT: str = ""
+    AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT: str = ""
+
     # DashScope settings
     DASH_SCOPE_API_KEY: str = ""
     DASH_SCOPE_EMBEDDINGS_MODEL: str = ""
+
+    # AWS Bedrock embeddings settings
+    AWS_BEDROCK_REGION: str = ""
+    AWS_BEDROCK_EMBEDDINGS_MODEL: str = "amazon.titan-embed-text-v2:0"
+    AWS_BEDROCK_PROFILE: str = ""
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_SESSION_TOKEN: str = ""
 
     # Vector Store settings
     VECTOR_STORE_TYPE: str = "pgvector"

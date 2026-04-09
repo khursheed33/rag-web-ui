@@ -1,6 +1,6 @@
 from typing import Optional
 from langchain_core.language_models import BaseChatModel
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from langchain_deepseek import ChatDeepSeek
 from langchain_ollama import OllamaLLM
 from app.core.config import settings
@@ -25,6 +25,15 @@ class LLMFactory:
                 model=settings.OPENAI_MODEL,
                 openai_api_key=settings.OPENAI_API_KEY,
                 openai_api_base=settings.OPENAI_API_BASE
+            )
+        elif provider.lower() == "azure_openai":
+            return AzureChatOpenAI(
+                temperature=temperature,
+                streaming=streaming,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                openai_api_version=settings.AZURE_OPENAI_API_VERSION,
+                azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT,
+                api_key=settings.AZURE_OPENAI_API_KEY,
             )
         elif provider.lower() == "deepseek":
             return ChatDeepSeek(
