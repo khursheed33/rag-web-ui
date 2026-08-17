@@ -1,6 +1,7 @@
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.runnables import Runnable
 from langchain_deepseek import ChatDeepSeek
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
@@ -14,7 +15,7 @@ class LLMFactory:
         provider: Optional[str] = None,
         temperature: float = 0,
         streaming: bool = True,
-    ) -> BaseChatModel:
+    ) -> Union[BaseChatModel, Runnable]:
         """Create an LLM instance based on the configured chat provider."""
         provider = provider or settings.CHAT_PROVIDER
 
@@ -50,7 +51,7 @@ class LLMFactory:
             raise ValueError(f"Unsupported LLM provider: {provider}")
 
     @staticmethod
-    def _create_ollama(temperature: float) -> ChatOllama:
+    def _create_ollama(temperature: float) -> Union[ChatOllama, Runnable]:
         """Build a ChatOllama client from .env settings."""
         ollama_kwargs: dict[str, Any] = {
             "model": settings.OLLAMA_MODEL,
@@ -73,4 +74,6 @@ class LLMFactory:
             ollama_kwargs["top_p"] = settings.OLLAMA_TOP_P
         if settings.ollama_client_kwargs:
             ollama_kwargs["client_kwargs"] = settings.ollama_client_kwargs
-        return ChatOllama(**ollama_kwargs)
+        llm = ChatOllama(**ollama_kwargs)
+        # Qwen 3.5 otherwise spends a long time in hidden thinking with empty tokens.
+        return llm.bind(think=settings.OLLAMA_THINK)

@@ -55,6 +55,18 @@ class Settings(BaseSettings):
             return value.strip().lower() in ("true", "1", "yes", "on")
         return bool(value)
 
+    @field_validator("OLLAMA_THINK", mode="before")
+    @classmethod
+    def parse_ollama_think(cls, value: Any) -> bool:
+        """Accept true/1/yes/on from .env; default is false so tokens stream immediately."""
+        if isinstance(value, bool):
+            return value
+        if value is None or (isinstance(value, str) and value.strip() == ""):
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in ("true", "1", "yes", "on")
+        return bool(value)
+
     # Chat Provider settings
     CHAT_PROVIDER: str = os.getenv("CHAT_PROVIDER", "ollama")
 
@@ -100,7 +112,7 @@ class Settings(BaseSettings):
 
     # Ollama settings (required when CHAT_PROVIDER=ollama or EMBEDDINGS_PROVIDER=ollama)
     OLLAMA_API_BASE: str = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     OLLAMA_EMBEDDINGS_MODEL: str = os.getenv(
         "OLLAMA_EMBEDDINGS_MODEL", "nomic-embed-text"
     )
@@ -111,6 +123,8 @@ class Settings(BaseSettings):
     OLLAMA_TOP_K: Optional[int] = None
     OLLAMA_TOP_P: Optional[float] = None
     OLLAMA_TIMEOUT: Optional[float] = None
+    # Qwen 3.5 and similar models hide tokens in a thinking phase unless this is false.
+    OLLAMA_THINK: bool = False
 
     @field_validator(
         "OLLAMA_TEMPERATURE",
@@ -134,9 +148,8 @@ class Settings(BaseSettings):
     @property
     def ollama_client_kwargs(self) -> dict[str, Any]:
         """HTTP client options for the Ollama LangChain clients."""
-        if self.OLLAMA_TIMEOUT is None:
-            return {}
-        return {"timeout": self.OLLAMA_TIMEOUT}
+        timeout = self.OLLAMA_TIMEOUT if self.OLLAMA_TIMEOUT is not None else 300.0
+        return {"timeout": timeout}
 
     # HuggingFace settings
     HUGGINGFACE_API_KEY: str = os.getenv("HUGGINGFACE_API_KEY", "")
